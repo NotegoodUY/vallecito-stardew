@@ -90,16 +90,16 @@ function qualityAverage(prices,fert,farming){
  return {price:prices[0]*normal+prices[1]*silver+prices[2]*gold+prices[3]*iridium,normal,silver,gold,iridium};
 }
 function projectCrop(c,start,gold,plots,options){
- const mod={speed:.1,speedDeluxe:.25,hyper:.33}[options.fert]||0, quality=qualityAverage(c.price,options.fert,options.farming),qualityTier={basic:1,quality:2,deluxe:3}[options.fert]||0;
+ const mod={speed:.1,speedDeluxe:.25,hyper:.33}[options.fert]||0, quality=qualityAverage(c.price,options.fert,options.farming),repeatQuality=qualityAverage(c.price,'none',options.farming),qualityTier={basic:1,quality:2,deluxe:3}[options.fert]||0;
  const fertilizerPerPlant=options.fert==='none'?0:Math.max(0,options.fertCost);
- const salePerHarvest=(c.yield||1)>1&&qualityTier>0?c.price[0]*((c.yield||1)-1)+quality.price:quality.price*(c.yield||1);
+ const salePerHarvest=(c.yield||1)>1&&qualityTier>0?c.price[0]*((c.yield||1)-1)+quality.price:quality.price*(c.yield||1),saleRepeat=(c.yield||1)>1&&qualityTier>0?c.price[0]*((c.yield||1)-1)+repeatQuality.price:repeatQuality.price*(c.yield||1);
  const growth=Math.max(1,Math.ceil(c.days*(1-mod))),repeat=c.repeat||0,unitsPerHarvest=c.yield||1;
  let cash=gold,pending=0,planted=false,harvests=0,bought=0,spend=0,earliest=Infinity,active=[],maxPlots=Math.max(0,plots),maxStarts=c.maxStarts??Infinity,seedStore=c.vendor==='Pierre'?'pierre':c.festival?'festival':'other';
  for(let day=start;day<=28;day++){
   const pierre=shopOpen(day,options.communityDone);
   if(pierre&&pending){cash+=pending;pending=0}
   const kept=[];
-  for(const plant of active){if(plant.next===day){const revenue=salePerHarvest;harvests+=unitsPerHarvest;if(pierre)cash+=revenue;else pending+=revenue;plant.left--;if(plant.left>0){plant.next=day+repeat;kept.push(plant)}}else kept.push(plant)}
+  for(const plant of active){if(plant.next===day){const revenue=plant.first?salePerHarvest:saleRepeat;harvests+=unitsPerHarvest;if(pierre)cash+=revenue;else pending+=revenue;plant.first=false;plant.left--;if(plant.left>0){plant.next=day+repeat;kept.push(plant)}}else kept.push(plant)}
   active=kept;
   const storeOpen=seedStore==='pierre'?pierre:seedStore==='festival'?canBuy(c,day,options.strawberrySeeds):true;
   const mayBuy=options.reinvest||!planted;
@@ -107,7 +107,7 @@ function projectCrop(c,start,gold,plots,options){
    let space=Math.min(maxPlots-active.length,maxStarts-bought);
    let unitCost=c.seed+fertilizerPerPlant,remaining=28-(day+growth),futureHarvests=repeat?1+Math.floor(Math.max(0,remaining)/repeat):1,projectedReturn=futureHarvests*salePerHarvest;let count=projectedReturn>=unitCost?Math.min(space,unitCost>0?Math.floor(cash/unitCost):space):0; 
    if(!options.reinvest&&planted)count=0;
-   for(let i=0;i<count;i++){cash-=c.seed+fertilizerPerPlant;spend+=c.seed+fertilizerPerPlant;bought++;planted=true;let first=day+growth;earliest=Math.min(earliest,first);let total=repeat?1+Math.floor((28-first)/repeat):1;active.push({next:first,left:total})}
+   for(let i=0;i<count;i++){cash-=c.seed+fertilizerPerPlant;spend+=c.seed+fertilizerPerPlant;bought++;planted=true;let first=day+growth;earliest=Math.min(earliest,first);let total=repeat?1+Math.floor((28-first)/repeat):1;active.push({next:first,left:total,first:true})}
   }
  }
  return {net:cash+pending-gold,harvests,bought,spend,ending:cash+pending,growth,firstHarvest:earliest,qualityMultiplier:quality.price/c.price[0]};
@@ -149,7 +149,7 @@ extra.dailyChecks ||= {}; extra.routineChecks ||= {}; extra.objectives ||= {}; e
 const saveExtra=()=>localStorage.setItem(extraKey,JSON.stringify(extra));
 const weekdays=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
 function dailyTasks(day,seasonName){
- const tasks=[['Revisar la televisión: suerte y clima','Diario'],['Regar los cultivos que no cubran los aspersores','Granja'],['Recoger cultivos maduros y revisar máquinas','Granja'],['Recorrer el suelo por objetos de recolección','Recolección'],['Revisar correo y el calendario de la plaza','Pueblo']];
+ const tasks=[];
  if(day===1&&seasonName==='Primavera')tasks.push(['Preparar un lote pequeño de cultivos rápidos; reserva oro para fresas','Meta de temporada']);
  if(day===2&&seasonName==='Primavera')tasks.push(['Recibir la carta de Willy y visitar la playa si buscas iniciar pesca','Desbloqueo']);
  if(day===5&&seasonName==='Primavera'){tasks.push(['Las Minas se abren: baja algunos pisos y activa el ascensor cada 5','Minas']);tasks.push(['Entra al pueblo entre 8:00 y 13:00 si no llueve para activar el Centro Comunitario','Centro Comunitario']);}
@@ -159,6 +159,7 @@ function dailyTasks(day,seasonName){
  if(seasonName==='Verano'&&day===11)tasks.push(['Festival del Luau en la playa; lleva un ingrediente de calidad si quieres','Festival']);
  if(seasonName==='Otoño'&&day===16)tasks.push(['Feria de Stardew Valley; guarda objetos para exhibición','Festival']);
  if(seasonName==='Invierno'&&day>=15&&day<=17)tasks.push(['Mercado Nocturno en la playa: explora sus tiendas y el submarino','Evento estacional']);
+ if(!tasks.length)tasks.push(['Día flexible: elige Minas, pesca, recolección o granja según tu prioridad y la energía.','Plan libre']);
  return tasks;
 }
 function objectiveRows(){return [
@@ -170,11 +171,11 @@ function objectiveRows(){return [
  ];}
 function simulateSpringSaving(c){
  const start=Math.max(1,+$('#startDay').value||1),until=Math.min(12,13-1),gold=Math.max(0,+$('#gold').value||0),energy=Math.max(0,+$('#energy').value||0),requested=Math.max(0,+$('#plots').value||0),tool=$('#irrigation').value,area={can:1,copper:3,steel:5,gold:9,iridium:18}[tool]||1,capacity=Math.min(requested,tool==='sprinkler'?requested:Math.floor(energy/2)*area);if(start>until)return null;
- const fert=$('#fertilizer').value,quality=qualityAverage(c.price,fert,+$('#farming').value||0).price,growth=Math.max(1,Math.ceil(c.days*(1-({speed:.1,speedDeluxe:.25,hyper:.33}[fert]||0)))),seedCost=c.seed+(+$('#fertCost').value||0),repeat=c.repeat||0,yieldCount=c.yield||1;let cash=gold,pending=0,bought=0,spent=0,active=[];
+ const fert=$('#fertilizer').value,quality=qualityAverage(c.price,fert,+$('#farming').value||0).price,repeatQuality=qualityAverage(c.price,'none',+$('#farming').value||0).price,growth=Math.max(1,Math.ceil(c.days*(1-({speed:.1,speedDeluxe:.25,hyper:.33}[fert]||0)))),seedCost=c.seed+(+$('#fertCost').value||0),repeat=c.repeat||0,yieldCount=c.yield||1;let cash=gold,pending=0,bought=0,spent=0,active=[];
  for(let day=start;day<=until;day++){
   cash+=pending;pending=0;const open=shopOpen(day,$('#communityDone').checked),keep=[];
-  for(const p of active){if(p.next===day){const revenue=quality*yieldCount;if(open)cash+=revenue;else pending+=revenue;p.left--;if(p.left){p.next=day+repeat;keep.push(p)}}else keep.push(p)}active=keep;
-  const mayBuy=$('#reinvent').checked||bought===0;if(open&&mayBuy&&capacity>active.length&&seedCost>0){const potential=quality*yieldCount*(repeat?1+Math.floor(Math.max(0,until-(day+growth))/repeat):1);if(potential>=seedCost){const count=Math.min(capacity-active.length,Math.floor(cash/seedCost));for(let i=0;i<count;i++){cash-=seedCost;spent+=seedCost;bought++;active.push({next:day+growth,left:repeat?1+Math.floor(Math.max(0,until-(day+growth))/repeat):1})}}}
+  for(const p of active){if(p.next===day){const revenue=(p.first?quality:repeatQuality)*yieldCount;if(open)cash+=revenue;else pending+=revenue;p.first=false;p.left--;if(p.left){p.next=day+repeat;keep.push(p)}}else keep.push(p)}active=keep;
+  const mayBuy=$('#reinvent').checked||bought===0;if(open&&mayBuy&&capacity>active.length&&seedCost>0){const potential=quality*yieldCount*(repeat?1+Math.floor(Math.max(0,until-(day+growth))/repeat):1);if(potential>=seedCost){const count=Math.min(capacity-active.length,Math.floor(cash/seedCost));for(let i=0;i<count;i++){cash-=seedCost;spent+=seedCost;bought++;active.push({next:day+growth,left:repeat?1+Math.floor(Math.max(0,until-(day+growth))/repeat):1,first:true})}}}
  }
  return {crop:c,ending:cash+pending,bought,spent,capacity};
 }
@@ -185,7 +186,7 @@ function renderDaily(){
  const routine=[['tv','Ver suerte y clima en la televisión'],['water','Regar lo que no cubren los aspersores'],['harvest','Cosechar y revisar procesadoras'],['forage','Recoger objetos que aparecieron en el suelo'],['grass','Cortar hierba o maleza si necesitas fibra (no limpies toda la hierba alta si quieres heno después)'],['animals','Atender animales, mascotas y máquinas si ya las tienes']];
  updateShopStatuses(day,seasonName);
  $('#routineList').innerHTML=routine.map(([id,label])=>`<label class="routine-row"><input type="checkbox" data-routine="${id}" ${extra.routineChecks[seasonName+'|'+day+'|'+id]?'checked':''}><span>${label}</span></label>`).join('');
- const days=Array.from({length:28},(_,i)=>i+1).filter(d=>d>=day);
+ const days=Array.from({length:Math.min(13,29-day)},(_,i)=>day+i);
  $('#dayList').innerHTML=days.map(d=>{const tasks=dailyTasks(d,seasonName),isToday=d===day;return `<article class="day-card ${isToday?'today':''}"><div class="day-heading"><span class="day-number">${d}</span><div><b>${seasonName} ${d} · ${weekdays[(d-1)%7]}</b><small>${isToday?'TU DÍA ACTUAL':'Plan sugerido'}</small></div>${d===13&&seasonName==='Primavera'?'<span class="day-badge">🍓 Fresas</span>':''}</div><div class="day-tasks">${tasks.map(([task,tag],i)=>{const k=seasonName+'|'+d+'|'+i;return `<label class="day-task"><input type="checkbox" data-day-task="${encodeURIComponent(k)}" ${extra.dailyChecks[k]?'checked':''}><span>${task}<small>${tag}</small></span></label>`}).join('')}</div></article>`}).join('')||'<div class="empty-state">Elige un día para ver el calendario desde esa fecha.</div>';
 }
 function updateShopStatuses(day,seasonName){const dow=(day-1)%7,done=$('#communityDone').checked,open={pierre:done||dow!==2,robin:dow!==1,clint:!(done&&dow===4),marnie:dow!==0&&dow!==1,willy:dow!==5,cart:dow===4||dow===6};Object.entries(open).forEach(([id,isOpen])=>{const el=$(`[data-shop-status="${id}"]`);if(el)el.textContent=`Hoy (${weekdays[dow]}): ${isOpen?'abre':'cerrado'}`});const fish=$('[data-shop-status="willy"]');if(fish&&dow===5)fish.textContent='Hoy (sábado): depende de la lluvia';const egg=$('[data-shop-status="cart"]');if(egg)egg.textContent=`Hoy: ${open.cart?'abre':'cerrado'}`;}
@@ -195,7 +196,7 @@ function renderResources(){
  $('#resourceList').innerHTML=extra.resources.length?extra.resources.slice().reverse().map(x=>`<article class="resource-row"><span>${x.source==='Basura'?'🗑️':x.source==='Minas'?'⛏️':x.source.includes('suelo')?'🌱':'🧺'}</span><div><b>${x.name} × ${x.qty}</b><small>${x.season} ${x.day} · ${x.source}${x.note?' · '+x.note:''}</small></div><strong>${fmt(x.qty*x.price)}g</strong><button class="icon-button" data-remove-resource="${x.id}" aria-label="Eliminar">×</button></article>`).join(''):'<div class="empty-state">Todavía no registraste hallazgos. Los objetos del paquete de primavera pueden convenir más guardados que vendidos.</div>';
 }
 function initExtra(){
- $('#dailySeason').addEventListener('click',e=>{const b=e.target.closest('[data-season]');if(!b)return;dailySeason=b.dataset.season;$$('#dailySeason button').forEach(x=>x.classList.toggle('selected',x===b));renderDaily()});
+ $('#dailySeason').addEventListener('click',e=>{const b=e.target.closest('[data-season]');if(!b)return;dailySeason=b.dataset.season;$$('#dailySeason button').forEach(x=>x.classList.toggle('selected',x===b));renderDaily()});$('#seasonToggle').addEventListener('click',()=>setTimeout(renderLockedStrawberry,0));
  $('#startDay').addEventListener('input',()=>{renderDaily();renderLockedStrawberry()});$('#communityDone').addEventListener('change',renderDaily);
  $('#dailySummary').addEventListener('change',e=>{const o=e.target.closest('[data-objective]');if(o){extra.objectives[o.dataset.objective]=o.checked;saveExtra();renderDaily()}});
  $('#routineList').addEventListener('change',e=>{const c=e.target.closest('[data-routine]');if(!c)return;const d=+$('#startDay').value;extra.routineChecks[dailySeason+'|'+d+'|'+c.dataset.routine]=c.checked;saveExtra()});
@@ -206,5 +207,5 @@ function initExtra(){
  document.querySelectorAll('#cultivos input,#cultivos select').forEach(el=>el.addEventListener('change',renderLockedStrawberry));
  renderDaily();renderResources();renderLockedStrawberry();
 }
-function renderLockedStrawberry(){const grid=$('#cropGrid');if(!grid)return;const exists=grid.querySelector('[data-strawberry-locked]');if(exists)exists.remove();if(season==='Primavera'&&+$('#startDay').value<13&&!$('#strawberrySeeds').checked){const card=document.createElement('article');card.className='crop-card strawberry-locked';card.dataset.strawberryLocked='1';card.innerHTML='<div class="crop-top"><span class="crop-emoji">🔒🍓</span><div><h3>Fresa · aún no disponible</h3><small>Festival del Huevo · Primavera 13</small></div></div><p>Se desbloquea para comprar en el festival, a 100g por semilla. Guarda oro hasta ese día. El Festival termina tarde; planta y riega al volver a la granja.</p><div class="quality-prices"><span>Maduración<b>8 días</b></span><span>Rebrote<b>cada 4 días</b></span><span>Precio base<b>120g</b></span><span>Primeras cosechas<b>días 21 y 25</b></span></div>';grid.prepend(card)}}
+function renderLockedStrawberry(){const grid=$('#cropGrid');if(!grid)return;const exists=grid.querySelector('[data-strawberry-locked]');if(exists)exists.remove();if(season==='Primavera'&&+$('#startDay').value<13&&!$('#strawberrySeeds').checked){const card=document.createElement('article');card.className='crop-card strawberry-locked';card.dataset.strawberryLocked='1';card.innerHTML='<div class="crop-top"><span class="crop-emoji">🔒🍓</span><div><h3>Fresa · aún no disponible</h3><small>Festival del Huevo · Primavera 13</small></div></div><p>Se desbloquea para comprar en el festival, a 100g por semilla. Guarda oro hasta ese día. El Festival termina tarde; planta y riega al volver a la granja.</p><div class="quality-prices"><span>Maduración<b>8 días</b></span><span>Rebrote<b>cada 4 días</b></span><span>Precio base<b>120g</b></span><span>Primeras cosechas<b>días 21 y 25*</b></span></div><small class="locked-note">*Sin fertilizante acelerador.</small>';grid.prepend(card)}}
 initExtra();

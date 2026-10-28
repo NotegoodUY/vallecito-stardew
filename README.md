@@ -5,8 +5,8 @@ Aplicación estática en español para planificar cultivos de Stardew Valley 1.6
 ## Funciones
 - Comparador de cultivos por estación, día, oro, fertilizante, energía y reinversión; muestra disponibilidad según fecha, tienda y año.
 - Plan diario con ruta del día, horario de tiendas hoy y mañana, eventos, rutina condicionada a la partida y avance automático de fecha.
-- Cierre de jornada: sincroniza el oro con el simulador, reinicia la energía diaria y acredita al día siguiente los envíos registrados.
-- Bitácora de hallazgos con precios base, sugerencia de guardar/vender/enviar e inventario de recursos registrados.
+- Cierre de jornada: avanza el calendario y reinicia la energía; ventas y compras registradas ajustan el oro al momento y acredita al día siguiente los envíos. Anota cantidades para llevar una mochila estimada.
+- Bitácora de hallazgos con precios base, sugerencia de guardar/vender/enviar/comprar, precios base estimados y mochila calculada desde lo guardado, vendido y enviado.
 - Precios de cultivos por calidad; estimación de maduración, rebrote y ganancia neta.
 - Checklist del Centro Comunitario con búsqueda, filtro de pendientes/completados, organización por paquete/nombre/estación/habilidad y modo sin spoilers.
 - Guardado local, exportación e importación del progreso JSON, el calendario, el inventario y la bitácora.
